@@ -1,11 +1,7 @@
-import 'dart:ui' as ui;
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:google_maps_cluster_manager/google_maps_cluster_manager.dart';
 import 'package:provider/provider.dart';
 import '../models/post.dart';
-import '../models/post_marker.dart';
 import '../models/post_category.dart';
 import '../services/firestore_service.dart';
 import '../services/location_service.dart';
@@ -26,26 +22,16 @@ class _MapScreenState extends State<MapScreen> {
   final LocationService _locationService = LocationService();
 
   GoogleMapController? _mapController;
-  ClusterManager? _clusterManager;
   LatLng _currentPosition = const LatLng(35.6812, 139.7671); // 東京駅がデフォルト
   Set<Marker> _markers = {};
   List<Post> _posts = [];
+  Set<PostCategory> _selectedCategories = {}; // 選択中のカテゴリ（空の場合は全て表示）
 
   @override
   void initState() {
     super.initState();
-    _initClusterManager();
     _getCurrentLocation();
     _loadPosts();
-  }
-
-  // ClusterManagerを初期化
-  void _initClusterManager() {
-    _clusterManager = ClusterManager<PostMarker>(
-      [],
-      _updateMarkers,
-      markerBuilder: _markerBuilder,
-    );
   }
 
   // 現在位置を取得
@@ -67,95 +53,35 @@ class _MapScreenState extends State<MapScreen> {
       setState(() {
         _posts = posts;
       });
-      // ClusterManagerにアイテムを設定
-      _clusterManager?.setItems(
-        posts.map((post) => PostMarker(post)).toList(),
-      );
-      _clusterManager?.updateMap();
+      _updateFilteredPosts();
     });
   }
 
-  // マーカーを更新（ClusterManagerから呼ばれる）
-  void _updateMarkers(Set<Marker> markers) {
-    setState(() {
-      _markers = markers;
-    });
-  }
+  // フィルタリングされた投稿を更新
+  void _updateFilteredPosts() {
+    List<Post> filteredPosts = _posts;
 
-  // マーカーを生成（ClusterManagerから呼ばれる）
-  Future<Marker> _markerBuilder(Cluster<PostMarker> cluster) async {
-    if (cluster.isMultiple) {
-      // クラスタマーカー（複数の投稿）
-      return Marker(
-        markerId: MarkerId(cluster.getId()),
-        position: cluster.location,
-        icon: await _getClusterIcon(cluster.count),
-        onTap: () {
-          // クラスタをタップしたらズームイン
-          _mapController?.animateCamera(
-            CameraUpdate.newLatLngZoom(cluster.location, 15),
-          );
-        },
-      );
-    } else {
-      // 個別マーカー（1つの投稿）
-      final post = cluster.items.first.post;
-      return Marker(
-        markerId: MarkerId(post.id),
-        position: LatLng(post.latitude, post.longitude),
-        icon: BitmapDescriptor.defaultMarkerWithHue(
-          _getCategoryColor(post.category),
-        ),
-        onTap: () => _showPostDetail(post),
-      );
+    // カテゴリフィルタを適用
+    if (_selectedCategories.isNotEmpty) {
+      filteredPosts = _posts.where((post) {
+        final category = PostCategoryExtension.fromString(post.category);
+        return _selectedCategories.contains(category);
+      }).toList();
     }
-  }
 
-  // クラスタマーカーのアイコンを生成
-  Future<BitmapDescriptor> _getClusterIcon(int count) async {
-    final size = 120.0;
-    final pictureRecorder = ui.PictureRecorder();
-    final canvas = Canvas(pictureRecorder);
-
-    // 円の背景を描画
-    final paint = Paint()..color = Colors.blue;
-    canvas.drawCircle(Offset(size / 2, size / 2), size / 2, paint);
-
-    // 白い枠を描画
-    final borderPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 8.0;
-    canvas.drawCircle(Offset(size / 2, size / 2), size / 2 - 4, borderPaint);
-
-    // テキストを描画
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text: count.toString(),
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 50.0,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-
-    textPainter.layout();
-    textPainter.paint(
-      canvas,
-      Offset(
-        (size - textPainter.width) / 2,
-        (size - textPainter.height) / 2,
-      ),
-    );
-
-    // 画像に変換
-    final picture = pictureRecorder.endRecording();
-    final image = await picture.toImage(size.toInt(), size.toInt());
-    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-
-    return BitmapDescriptor.fromBytes(bytes!.buffer.asUint8List());
+    // マーカーを更新
+    setState(() {
+      _markers = filteredPosts.map((post) {
+        return Marker(
+          markerId: MarkerId(post.id),
+          position: LatLng(post.latitude, post.longitude),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            _getCategoryColor(post.category),
+          ),
+          onTap: () => _showPostDetail(post),
+        );
+      }).toSet();
+    });
   }
 
   // カテゴリに応じた色を返す
@@ -178,6 +104,95 @@ class _MapScreenState extends State<MapScreen> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => const CreatePostScreen(),
+      ),
+    );
+  }
+
+  // カテゴリフィルタダイアログを表示
+  void _showCategoryFilter() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('カテゴリフィルタ'),
+        content: StatefulBuilder(
+          builder: (context, setDialogState) {
+            return SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 全て選択/解除
+                  CheckboxListTile(
+                    title: const Text(
+                      'すべて',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    value: _selectedCategories.isEmpty,
+                    onChanged: (value) {
+                      setDialogState(() {
+                        if (value == true) {
+                          _selectedCategories.clear();
+                        } else {
+                          _selectedCategories = PostCategory.values.toSet();
+                        }
+                      });
+                    },
+                  ),
+                  const Divider(),
+                  // 各カテゴリ
+                  ...PostCategory.values.map((category) {
+                    return CheckboxListTile(
+                      title: Row(
+                        children: [
+                          Icon(category.icon, size: 20, color: category.markerColor),
+                          const SizedBox(width: 8),
+                          Text(category.displayName),
+                        ],
+                      ),
+                      value: _selectedCategories.isEmpty || _selectedCategories.contains(category),
+                      onChanged: (value) {
+                        setDialogState(() {
+                          if (value == true) {
+                            _selectedCategories.add(category);
+                            // 全て選択された場合はクリア（全て表示状態にする）
+                            if (_selectedCategories.length == PostCategory.values.length) {
+                              _selectedCategories.clear();
+                            }
+                          } else {
+                            // 一度全て選択状態から個別解除する場合
+                            if (_selectedCategories.isEmpty) {
+                              _selectedCategories = PostCategory.values.toSet();
+                            }
+                            _selectedCategories.remove(category);
+                          }
+                        });
+                      },
+                    );
+                  }),
+                ],
+              ),
+            );
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('キャンセル'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              setState(() {
+                // フィルタを適用
+              });
+              _updateFilteredPosts();
+              Navigator.of(context).pop();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('適用'),
+          ),
+        ],
       ),
     );
   }
@@ -242,13 +257,6 @@ class _MapScreenState extends State<MapScreen> {
         ),
         onMapCreated: (controller) {
           _mapController = controller;
-          _clusterManager?.setMapId(controller.mapId);
-        },
-        onCameraMove: (position) {
-          _clusterManager?.onCameraMove(position);
-        },
-        onCameraIdle: () {
-          _clusterManager?.updateMap();
         },
         markers: _markers,
         myLocationEnabled: true,
@@ -258,17 +266,15 @@ class _MapScreenState extends State<MapScreen> {
       floatingActionButton: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          // カテゴリフィルターボタン（将来の拡張用）
+          // カテゴリフィルターボタン
           FloatingActionButton(
             heroTag: 'filter',
-            onPressed: () {
-              // カテゴリフィルター機能を実装
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('カテゴリフィルター機能は開発中です')),
-              );
-            },
-            backgroundColor: Colors.white,
-            child: const Icon(Icons.filter_list, color: Colors.blue),
+            onPressed: _showCategoryFilter,
+            backgroundColor: _selectedCategories.isEmpty ? Colors.white : Colors.blue,
+            child: Icon(
+              Icons.filter_list,
+              color: _selectedCategories.isEmpty ? Colors.blue : Colors.white,
+            ),
           ),
           const SizedBox(height: 16),
           // 投稿作成ボタン
