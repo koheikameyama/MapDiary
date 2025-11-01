@@ -1,6 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../providers/auth_provider.dart';
+import '../services/storage_service.dart';
 
 class ProfileEditScreen extends StatefulWidget {
   const ProfileEditScreen({super.key});
@@ -12,19 +16,66 @@ class ProfileEditScreen extends StatefulWidget {
 class _ProfileEditScreenState extends State<ProfileEditScreen> {
   final _formKey = GlobalKey<FormState>();
   final _displayNameController = TextEditingController();
+  final StorageService _storageService = StorageService();
+  final ImagePicker _imagePicker = ImagePicker();
   bool _isLoading = false;
+  File? _selectedImage;
+  String? _currentPhotoUrl;
 
   @override
   void initState() {
     super.initState();
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     _displayNameController.text = authProvider.userModel?.displayName ?? '';
+    _currentPhotoUrl = authProvider.userModel?.photoUrl;
   }
 
   @override
   void dispose() {
     _displayNameController.dispose();
     super.dispose();
+  }
+
+  // 画像を選択
+  Future<void> _pickImage() async {
+    // 写真選択ダイアログを表示
+    final ImageSource? source = await showDialog<ImageSource>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('プロフィール画像を選択'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('カメラで撮影'),
+              onTap: () => Navigator.of(context).pop(ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('ギャラリーから選択'),
+              onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (source == null) return;
+
+    // 写真を選択
+    final XFile? image = await _imagePicker.pickImage(
+      source: source,
+      maxWidth: 512,
+      maxHeight: 512,
+      imageQuality: 85,
+    );
+
+    if (image != null) {
+      setState(() {
+        _selectedImage = File(image.path);
+      });
+    }
   }
 
   Future<void> _saveProfile() async {
@@ -36,30 +87,57 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       _isLoading = true;
     });
 
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    bool success = await authProvider.updateProfile(
-      displayName: _displayNameController.text.trim(),
-    );
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      String? photoUrl = _currentPhotoUrl;
 
-    setState(() {
-      _isLoading = false;
-    });
+      // 新しい画像が選択されている場合はアップロード
+      if (_selectedImage != null && authProvider.user != null) {
+        photoUrl = await _storageService.uploadProfileImage(
+          _selectedImage!,
+          authProvider.user!.uid,
+        );
+      }
 
-    if (success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('プロフィールを更新しました'),
-          backgroundColor: Colors.green,
-        ),
+      // プロフィールを更新
+      bool success = await authProvider.updateProfile(
+        displayName: _displayNameController.text.trim(),
+        photoUrl: photoUrl,
       );
-      Navigator.of(context).pop();
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('プロフィールの更新に失敗しました'),
-          backgroundColor: Colors.red,
-        ),
-      );
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('プロフィールを更新しました'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.of(context).pop();
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('プロフィールの更新に失敗しました'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('エラーが発生しました: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -81,34 +159,25 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // プロフィール画像（将来的に実装）
+              // プロフィール画像
               Center(
                 child: Stack(
                   children: [
                     CircleAvatar(
                       radius: 60,
                       backgroundColor: Colors.blue[100],
-                      child: userModel?.photoUrl != null
-                          ? ClipOval(
-                              child: Image.network(
-                                userModel!.photoUrl!,
-                                width: 120,
-                                height: 120,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Icon(
-                                    Icons.person,
-                                    size: 60,
-                                    color: Colors.blue[700],
-                                  );
-                                },
-                              ),
-                            )
-                          : Icon(
+                      backgroundImage: _selectedImage != null
+                          ? FileImage(_selectedImage!) as ImageProvider
+                          : (userModel?.photoUrl != null
+                              ? CachedNetworkImageProvider(userModel!.photoUrl!) as ImageProvider
+                              : null),
+                      child: (_selectedImage == null && userModel?.photoUrl == null)
+                          ? Icon(
                               Icons.person,
                               size: 60,
                               color: Colors.blue[700],
-                            ),
+                            )
+                          : null,
                     ),
                     Positioned(
                       bottom: 0,
@@ -120,14 +189,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                         ),
                         child: IconButton(
                           icon: const Icon(Icons.camera_alt, color: Colors.white, size: 20),
-                          onPressed: () {
-                            // 将来的に画像アップロード機能を実装
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('画像アップロード機能は今後実装予定です'),
-                              ),
-                            );
-                          },
+                          onPressed: _pickImage,
                         ),
                       ),
                     ),

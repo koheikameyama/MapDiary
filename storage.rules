@@ -1,0 +1,17 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // 投稿画像（posts）: 認証済みユーザーは読み取りと作成が可能
+    match /posts/{imageId} {
+      allow read: if true;  // 全員が読み取り可能
+      allow write: if request.auth != null;  // 認証済みユーザーが書き込み可能
+    }
+
+    // プロフィール画像（profile_images）: 認証済みユーザーは読み取りと書き込みが可能
+    match /profile_images/{imageId} {
+      allow read: if true;  // 全員が読み取り可能
+      allow write: if request.auth != null;  // 認証済みユーザーが書き込み可能
+    }
+  }
+}

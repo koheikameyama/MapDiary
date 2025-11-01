@@ -31,6 +31,32 @@ class StorageService {
     }
   }
 
+  // プロフィール画像をアップロード
+  Future<String> uploadProfileImage(File imageFile, String userId) async {
+    try {
+      // ファイル名を生成（ユーザーID + タイムスタンプ）
+      String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      String fileName = '${userId}_${timestamp}${path.extension(imageFile.path)}';
+
+      // ストレージ参照を作成（profile_imagesフォルダ）
+      Reference ref = _storage.ref().child('profile_images').child(fileName);
+
+      // ファイルをアップロード
+      UploadTask uploadTask = ref.putFile(imageFile);
+
+      // アップロード完了を待つ
+      TaskSnapshot snapshot = await uploadTask;
+
+      // ダウンロードURLを取得
+      String downloadUrl = await snapshot.ref.getDownloadURL();
+
+      return downloadUrl;
+    } catch (e) {
+      print('プロフィール画像アップロードエラー: $e');
+      rethrow;
+    }
+  }
+
   // 画像を削除
   Future<void> deleteImage(String imageUrl) async {
     try {
