@@ -29,8 +29,59 @@ class MyApp extends StatelessWidget {
         title: 'SnapMap',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF64B5F6), // 柔らかい青
+            brightness: Brightness.light,
+          ),
           useMaterial3: true,
+          // ボタンのテーマ
+          elevatedButtonTheme: ElevatedButtonThemeData(
+            style: ElevatedButton.styleFrom(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            ),
+          ),
+          // カードのテーマ
+          cardTheme: CardTheme(
+            elevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+          // AppBarのテーマ
+          appBarTheme: const AppBarTheme(
+            elevation: 0,
+            centerTitle: true,
+            backgroundColor: Color(0xFF64B5F6),
+            foregroundColor: Colors.white,
+          ),
+          // FloatingActionButtonのテーマ
+          floatingActionButtonTheme: const FloatingActionButtonThemeData(
+            elevation: 2,
+            backgroundColor: Color(0xFF64B5F6),
+            foregroundColor: Colors.white,
+          ),
+          // InputDecorationのテーマ
+          inputDecorationTheme: InputDecorationTheme(
+            filled: true,
+            fillColor: Colors.grey[50],
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: Color(0xFF64B5F6), width: 2),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          ),
         ),
         initialRoute: '/login',
         routes: {

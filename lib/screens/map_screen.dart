@@ -220,7 +220,7 @@ class _MapScreenState extends State<MapScreen> {
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('キャンセル'),
           ),
-          ElevatedButton(
+          FilledButton(
             onPressed: () {
               setState(() {
                 // フィルタを適用
@@ -228,10 +228,6 @@ class _MapScreenState extends State<MapScreen> {
               _updateFilteredPosts();
               Navigator.of(context).pop();
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-              foregroundColor: Colors.white,
-            ),
             child: const Text('適用'),
           ),
         ],
@@ -245,9 +241,7 @@ class _MapScreenState extends State<MapScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('SnapMap'),
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
+        title: const Text('SnapMap', style: TextStyle(fontWeight: FontWeight.w600)),
         actions: [
           IconButton(
             icon: const Icon(Icons.my_location),
@@ -408,10 +402,10 @@ class _MapScreenState extends State<MapScreen> {
           FloatingActionButton(
             heroTag: 'filter',
             onPressed: _showCategoryFilter,
-            backgroundColor: _selectedCategories.isEmpty ? Colors.white : Colors.blue,
+            backgroundColor: _selectedCategories.isEmpty ? Colors.white : const Color(0xFF64B5F6),
             child: Icon(
-              Icons.filter_list,
-              color: _selectedCategories.isEmpty ? Colors.blue : Colors.white,
+              Icons.filter_list_rounded,
+              color: _selectedCategories.isEmpty ? const Color(0xFF64B5F6) : Colors.white,
             ),
           ),
           const SizedBox(height: 16),
@@ -419,8 +413,7 @@ class _MapScreenState extends State<MapScreen> {
           FloatingActionButton(
             heroTag: 'create',
             onPressed: _navigateToCreatePost,
-            backgroundColor: Colors.blue,
-            child: const Icon(Icons.add_a_photo, color: Colors.white),
+            child: const Icon(Icons.add_photo_alternate_rounded),
           ),
         ],
       ),

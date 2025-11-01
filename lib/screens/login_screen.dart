@@ -174,13 +174,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 24),
 
                   // ログイン/サインアップボタン
-                  ElevatedButton(
+                  FilledButton(
                     onPressed: authProvider.isLoading ? null : _submit,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                    ),
                     child: authProvider.isLoading
                         ? const SizedBox(
                             height: 20,

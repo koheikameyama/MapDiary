@@ -238,9 +238,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('投稿を作成'),
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
+        title: const Text('投稿を作成', style: TextStyle(fontWeight: FontWeight.w600)),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -447,13 +445,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             const SizedBox(height: 24),
 
             // 投稿ボタン
-            ElevatedButton(
+            FilledButton(
               onPressed: _isLoading ? null : _createPost,
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-              ),
               child: _isLoading
                   ? const SizedBox(
                       height: 20,
