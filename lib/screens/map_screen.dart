@@ -3,6 +3,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import '../models/post.dart';
 import '../models/post_category.dart';
+import '../models/place_search_result.dart';
 import '../services/firestore_service.dart';
 import '../services/location_service.dart';
 import '../providers/auth_provider.dart';
@@ -26,6 +27,10 @@ class _MapScreenState extends State<MapScreen> {
   Set<Marker> _markers = {};
   List<Post> _posts = [];
   Set<PostCategory> _selectedCategories = {}; // 選択中のカテゴリ（空の場合は全て表示）
+
+  final _searchController = TextEditingController();
+  List<PlaceSearchResult> _searchResults = [];
+  bool _isSearching = false;
 
   @override
   void initState() {
@@ -104,6 +109,43 @@ class _MapScreenState extends State<MapScreen> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => const CreatePostScreen(),
+      ),
+    );
+  }
+
+  // 場所を検索
+  Future<void> _searchLocation(String query) async {
+    if (query.trim().isEmpty) {
+      setState(() {
+        _searchResults = [];
+      });
+      return;
+    }
+
+    final results = await _locationService.searchPlaces(
+      query,
+      latitude: _currentPosition.latitude,
+      longitude: _currentPosition.longitude,
+    );
+
+    setState(() {
+      _searchResults = results;
+    });
+  }
+
+  // 場所を選択して地図を移動
+  void _selectPlace(PlaceSearchResult place) {
+    setState(() {
+      _searchResults = [];
+      _searchController.clear();
+      _isSearching = false;
+    });
+
+    // 選択した場所に地図を移動
+    _mapController?.animateCamera(
+      CameraUpdate.newLatLngZoom(
+        LatLng(place.latitude, place.longitude),
+        15,
       ),
     );
   }
@@ -250,18 +292,114 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ],
       ),
-      body: GoogleMap(
-        initialCameraPosition: CameraPosition(
-          target: _currentPosition,
-          zoom: 14,
-        ),
-        onMapCreated: (controller) {
-          _mapController = controller;
-        },
-        markers: _markers,
-        myLocationEnabled: true,
-        myLocationButtonEnabled: false,
-        zoomControlsEnabled: false,
+      body: Stack(
+        children: [
+          // 地図
+          GoogleMap(
+            initialCameraPosition: CameraPosition(
+              target: _currentPosition,
+              zoom: 14,
+            ),
+            onMapCreated: (controller) {
+              _mapController = controller;
+            },
+            markers: _markers,
+            myLocationEnabled: true,
+            myLocationButtonEnabled: false,
+            zoomControlsEnabled: false,
+          ),
+
+          // 検索バー
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 検索入力
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(28),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: '場所を検索',
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: _searchController.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear),
+                                onPressed: () {
+                                  setState(() {
+                                    _searchController.clear();
+                                    _searchResults = [];
+                                  });
+                                },
+                              )
+                            : null,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(28),
+                          borderSide: BorderSide.none,
+                        ),
+                        filled: true,
+                        fillColor: Colors.white,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                      ),
+                      onChanged: (value) {
+                        setState(() {});
+                        _searchLocation(value);
+                      },
+                    ),
+                  ),
+
+                  // 検索結果リスト
+                  if (_searchResults.isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(top: 8),
+                      constraints: const BoxConstraints(maxHeight: 300),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: _searchResults.length,
+                        itemBuilder: (context, index) {
+                          final place = _searchResults[index];
+                          return ListTile(
+                            leading: const Icon(Icons.place),
+                            title: Text(place.name),
+                            subtitle: Text(
+                              place.formattedAddress,
+                              style: const TextStyle(fontSize: 12),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onTap: () => _selectPlace(place),
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
       floatingActionButton: Column(
         mainAxisAlignment: MainAxisAlignment.end,
@@ -291,6 +429,7 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   void dispose() {
+    _searchController.dispose();
     _mapController?.dispose();
     super.dispose();
   }
