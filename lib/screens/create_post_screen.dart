@@ -3,10 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../models/post.dart';
+import '../models/post_category.dart';
 import '../services/firestore_service.dart';
 import '../services/storage_service.dart';
 import '../services/location_service.dart';
 import '../providers/auth_provider.dart';
+import '../models/place_search_result.dart';
+import 'profile_edit_screen.dart';
 
 class CreatePostScreen extends StatefulWidget {
   const CreatePostScreen({super.key});
@@ -22,13 +25,14 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   final ImagePicker _imagePicker = ImagePicker();
 
   final _captionController = TextEditingController();
+  final _locationSearchController = TextEditingController();
   File? _selectedImage;
-  String _selectedCategory = '猫';
+  PostCategory _selectedCategory = PostCategory.daily;
   bool _isLoading = false;
   double? _latitude;
   double? _longitude;
-
-  final List<String> _categories = ['猫', '風景', '旅行', '日常', 'その他'];
+  String? _locationName;
+  List<PlaceSearchResult> _searchResults = [];
 
   @override
   void initState() {
@@ -39,6 +43,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   @override
   void dispose() {
     _captionController.dispose();
+    _locationSearchController.dispose();
     super.dispose();
   }
 
@@ -83,6 +88,46 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         _selectedImage = File(image.path);
       });
     }
+  }
+
+  // 場所を検索
+  Future<void> _searchLocation(String query) async {
+    if (query.trim().isEmpty) {
+      setState(() {
+        _searchResults = [];
+      });
+      return;
+    }
+
+    final results = await _locationService.searchPlaces(
+      query,
+      latitude: _latitude,
+      longitude: _longitude,
+    );
+
+    setState(() {
+      _searchResults = results;
+    });
+  }
+
+  // 場所を選択
+  void _selectPlace(PlaceSearchResult place) {
+    setState(() {
+      _latitude = place.latitude;
+      _longitude = place.longitude;
+      _locationName = place.name;
+      _locationSearchController.text = place.name;
+      _searchResults = [];
+    });
+  }
+
+  // 現在地を使用
+  void _useCurrentLocation() {
+    _getLocation();
+    setState(() {
+      _locationName = null;
+      _locationSearchController.clear();
+    });
   }
 
   // 画像選択ダイアログを表示
@@ -160,7 +205,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         caption: _captionController.text.trim(),
         latitude: _latitude!,
         longitude: _longitude!,
-        category: _selectedCategory,
+        locationName: _locationName,
+        category: _selectedCategory.toFirestoreString(),
         tags: [], // 将来的にタグ機能を追加
         createdAt: DateTime.now(),
       );
@@ -188,6 +234,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final authProvider = Provider.of<AuthProvider>(context);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('投稿を作成'),
@@ -232,6 +280,34 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             ),
             const SizedBox(height: 24),
 
+            // ユーザー情報
+            Row(
+              children: [
+                Text(
+                  '表示名: ',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                ),
+                Text(
+                  authProvider.userModel?.displayName ?? 'ユーザー',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.edit, size: 18),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const ProfileEditScreen(),
+                      ),
+                    );
+                  },
+                  tooltip: 'プロフィールを編集',
+                  padding: const EdgeInsets.all(4),
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
             // キャプション
             TextField(
               controller: _captionController,
@@ -252,10 +328,19 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
-              children: _categories.map((category) {
+              runSpacing: 8,
+              children: PostCategory.values.map((category) {
                 return ChoiceChip(
-                  label: Text(category),
+                  label: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(category.icon, size: 18),
+                      const SizedBox(width: 4),
+                      Text(category.displayName),
+                    ],
+                  ),
                   selected: _selectedCategory == category,
+                  selectedColor: category.markerColor.withOpacity(0.3),
                   onSelected: (selected) {
                     if (selected) {
                       setState(() {
@@ -268,24 +353,92 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             ),
             const SizedBox(height: 24),
 
-            // 位置情報表示
-            if (_latitude != null && _longitude != null)
+            // 位置情報・場所検索
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  '場所',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                TextButton.icon(
+                  onPressed: _useCurrentLocation,
+                  icon: const Icon(Icons.my_location, size: 18),
+                  label: const Text('現在地を取得'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _locationSearchController,
+              decoration: InputDecoration(
+                labelText: '場所を検索（任意）',
+                border: const OutlineInputBorder(),
+                hintText: 'お店の名前や場所を検索',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _locationSearchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: _useCurrentLocation,
+                      )
+                    : null,
+              ),
+              onChanged: _searchLocation,
+            ),
+
+            // 検索結果リスト
+            if (_searchResults.isNotEmpty)
+              Container(
+                margin: const EdgeInsets.only(top: 8),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey[300]!),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                constraints: const BoxConstraints(maxHeight: 200),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _searchResults.length,
+                  itemBuilder: (context, index) {
+                    final place = _searchResults[index];
+                    return ListTile(
+                      leading: const Icon(Icons.place),
+                      title: Text(place.name),
+                      subtitle: Text(
+                        place.formattedAddress,
+                        style: const TextStyle(fontSize: 12),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onTap: () => _selectPlace(place),
+                    );
+                  },
+                ),
+              ),
+
+            // 選択された場所を表示
+            if (_locationName != null)
               Card(
+                margin: const EdgeInsets.only(top: 8),
                 child: Padding(
-                  padding: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.all(12.0),
                   child: Row(
                     children: [
-                      const Icon(Icons.location_on, color: Colors.blue),
+                      const Icon(
+                        Icons.place,
+                        color: Colors.blue,
+                        size: 20,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          '位置情報: ${_latitude!.toStringAsFixed(4)}, ${_longitude!.toStringAsFixed(4)}',
-                          style: const TextStyle(fontSize: 12),
+                          _locationName!,
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                       ),
-                      TextButton(
-                        onPressed: _getLocation,
-                        child: const Text('更新'),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 20),
+                        onPressed: _useCurrentLocation,
+                        tooltip: '削除',
                       ),
                     ],
                   ),

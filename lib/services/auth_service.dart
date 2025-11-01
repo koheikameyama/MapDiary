@@ -138,4 +138,32 @@ class AuthService {
       return null;
     }
   }
+
+  // プロフィールを更新
+  Future<void> updateProfile({
+    required String userId,
+    required String displayName,
+    String? photoUrl,
+  }) async {
+    try {
+      // Firestoreのユーザー情報を更新
+      await _firestore.collection('users').doc(userId).update({
+        'displayName': displayName,
+        if (photoUrl != null) 'photoUrl': photoUrl,
+      });
+
+      // Firebase Authの表示名も更新
+      User? user = _auth.currentUser;
+      if (user != null) {
+        await user.updateDisplayName(displayName);
+        if (photoUrl != null) {
+          await user.updatePhotoURL(photoUrl);
+        }
+        await user.reload();
+      }
+    } catch (e) {
+      print('プロフィール更新エラー: $e');
+      rethrow;
+    }
+  }
 }

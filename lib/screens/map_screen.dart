@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import '../models/post.dart';
+import '../models/post_category.dart';
 import '../services/firestore_service.dart';
 import '../services/location_service.dart';
 import '../providers/auth_provider.dart';
 import 'post_detail_screen.dart';
 import 'create_post_screen.dart';
+import 'profile_edit_screen.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -70,18 +72,8 @@ class _MapScreenState extends State<MapScreen> {
 
   // カテゴリに応じた色を返す
   double _getCategoryColor(String category) {
-    switch (category) {
-      case '猫':
-        return BitmapDescriptor.hueOrange;
-      case '風景':
-        return BitmapDescriptor.hueGreen;
-      case '旅行':
-        return BitmapDescriptor.hueBlue;
-      case '日常':
-        return BitmapDescriptor.hueYellow;
-      default:
-        return BitmapDescriptor.hueRed;
-    }
+    final postCategory = PostCategoryExtension.fromString(category);
+    return postCategory.markerHue;
   }
 
   // 投稿詳細を表示
@@ -119,12 +111,28 @@ class _MapScreenState extends State<MapScreen> {
           ),
           PopupMenuButton<String>(
             onSelected: (value) {
-              if (value == 'logout') {
+              if (value == 'profile') {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const ProfileEditScreen(),
+                  ),
+                );
+              } else if (value == 'logout') {
                 authProvider.signOut();
                 Navigator.of(context).pushReplacementNamed('/login');
               }
             },
             itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'profile',
+                child: Row(
+                  children: [
+                    Icon(Icons.person),
+                    SizedBox(width: 8),
+                    Text('プロフィール編集'),
+                  ],
+                ),
+              ),
               const PopupMenuItem(
                 value: 'logout',
                 child: Row(

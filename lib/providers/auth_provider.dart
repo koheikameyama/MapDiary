@@ -81,6 +81,37 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  // プロフィールを更新
+  Future<bool> updateProfile({
+    required String displayName,
+    String? photoUrl,
+  }) async {
+    if (_user == null) return false;
+
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      await _authService.updateProfile(
+        userId: _user!.uid,
+        displayName: displayName,
+        photoUrl: photoUrl,
+      );
+
+      // ユーザーデータを再取得
+      _userModel = await _authService.getUserData(_user!.uid);
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _isLoading = false;
+      notifyListeners();
+      print('プロフィール更新エラー: $e');
+      return false;
+    }
+  }
+
   // サインアウト
   Future<void> signOut() async {
     await _authService.signOut();

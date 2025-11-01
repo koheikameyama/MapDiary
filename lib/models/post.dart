@@ -8,6 +8,7 @@ class Post {
   final String? caption;
   final double latitude;
   final double longitude;
+  final String? locationName;
   final String category;
   final List<String> tags;
   final DateTime createdAt;
@@ -21,6 +22,7 @@ class Post {
     this.caption,
     required this.latitude,
     required this.longitude,
+    this.locationName,
     required this.category,
     required this.tags,
     required this.createdAt,
@@ -38,6 +40,7 @@ class Post {
       caption: data['caption'],
       latitude: (data['latitude'] ?? 0).toDouble(),
       longitude: (data['longitude'] ?? 0).toDouble(),
+      locationName: data['locationName'],
       category: data['category'] ?? 'その他',
       tags: List<String>.from(data['tags'] ?? []),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
@@ -54,6 +57,7 @@ class Post {
       'caption': caption,
       'latitude': latitude,
       'longitude': longitude,
+      'locationName': locationName,
       'category': category,
       'tags': tags,
       'createdAt': Timestamp.fromDate(createdAt),

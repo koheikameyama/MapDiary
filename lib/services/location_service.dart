@@ -1,7 +1,13 @@
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import '../models/place_search_result.dart';
 
 class LocationService {
+  // Google Places API Key
+  static const String _apiKey = 'AIzaSyAcQFAU48TNLUSmV_lfS0QcvoxDG2nW-xY';
+
   // 位置情報の権限を確認してリクエスト
   Future<bool> requestLocationPermission() async {
     PermissionStatus status = await Permission.location.request();
@@ -75,5 +81,55 @@ class LocationService {
     double endLng,
   ) {
     return Geolocator.distanceBetween(startLat, startLng, endLat, endLng);
+  }
+
+  // 場所を検索（Google Places API Text Search）
+  Future<List<PlaceSearchResult>> searchPlaces(
+    String query, {
+    double? latitude,
+    double? longitude,
+  }) async {
+    if (query.trim().isEmpty) {
+      return [];
+    }
+
+    try {
+      // 現在地があれば位置バイアスを追加
+      String location = '';
+      if (latitude != null && longitude != null) {
+        location = '&location=$latitude,$longitude&radius=5000';
+      }
+
+      final url = Uri.parse(
+        'https://maps.googleapis.com/maps/api/place/textsearch/json?query=$query$location&language=ja&key=$_apiKey',
+      );
+
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+
+        if (data['status'] == 'OK') {
+          final results = data['results'] as List;
+          print('検索結果: ${results.length}件');
+          return results
+              .map((result) => PlaceSearchResult.fromJson(result))
+              .toList();
+        } else {
+          print('Places API エラー: ${data['status']}');
+          if (data['error_message'] != null) {
+            print('エラー詳細: ${data['error_message']}');
+          }
+          return [];
+        }
+      } else {
+        print('HTTP エラー: ${response.statusCode}');
+        print('レスポンス: ${response.body}');
+        return [];
+      }
+    } catch (e) {
+      print('場所検索エラー: $e');
+      return [];
+    }
   }
 }

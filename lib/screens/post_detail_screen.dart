@@ -3,7 +3,10 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../models/post.dart';
+import '../models/post_category.dart';
+import '../models/user_model.dart';
 import '../services/firestore_service.dart';
+import '../services/auth_service.dart';
 import '../providers/auth_provider.dart';
 
 class PostDetailScreen extends StatefulWidget {
@@ -17,6 +20,7 @@ class PostDetailScreen extends StatefulWidget {
 
 class _PostDetailScreenState extends State<PostDetailScreen> {
   final FirestoreService _firestoreService = FirestoreService();
+  final AuthService _authService = AuthService();
   bool _isLiked = false;
   int _likesCount = 0;
 
@@ -204,35 +208,42 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // ユーザー情報と日時
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        child: Text(widget.post.userName[0]),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.post.userName,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
+                  FutureBuilder<UserModel?>(
+                    future: _authService.getUserData(widget.post.userId),
+                    builder: (context, snapshot) {
+                      final displayName = snapshot.data?.displayName ?? widget.post.userName;
+
+                      return Row(
+                        children: [
+                          CircleAvatar(
+                            child: Text(displayName[0]),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  displayName,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                Text(
+                                  DateFormat('yyyy/MM/dd HH:mm')
+                                      .format(widget.post.createdAt),
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
                             ),
-                            Text(
-                              DateFormat('yyyy/MM/dd HH:mm')
-                                  .format(widget.post.createdAt),
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                          ),
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: 16),
 
@@ -255,9 +266,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   const SizedBox(height: 16),
 
                   // カテゴリ
-                  Chip(
-                    label: Text(widget.post.category),
-                    backgroundColor: Colors.blue[100],
+                  Builder(
+                    builder: (context) {
+                      final category = PostCategoryExtension.fromString(widget.post.category);
+                      return Chip(
+                        avatar: Icon(category.icon, size: 18, color: category.markerColor),
+                        label: Text(category.displayName),
+                        backgroundColor: category.markerColor.withOpacity(0.2),
+                      );
+                    },
                   ),
                   const SizedBox(height: 16),
 
@@ -272,23 +289,30 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   ],
 
                   // 位置情報
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.location_on, color: Colors.blue),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              '位置情報: ${widget.post.latitude.toStringAsFixed(4)}, ${widget.post.longitude.toStringAsFixed(4)}',
-                              style: const TextStyle(fontSize: 12),
+                  if (widget.post.locationName != null)
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.place,
+                              color: Colors.blue,
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                widget.post.locationName!,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),
