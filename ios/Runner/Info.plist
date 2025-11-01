@@ -46,9 +46,9 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 
-	<!-- Google Maps APIキー（要設定） -->
+	<!-- Google Maps APIキー（Secrets.xcconfigから自動取得） -->
 	<key>GMSApiKey</key>
-	<string>YOUR_GOOGLE_MAPS_API_KEY_HERE</string>
+	<string>$(GOOGLE_MAPS_API_KEY)</string>
 
 	<!-- 位置情報の使用許可 -->
 	<key>NSLocationWhenInUseUsageDescription</key>
