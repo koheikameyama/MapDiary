@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../models/post.dart';
 import '../models/post_category.dart';
 import '../models/place_search_result.dart';
@@ -33,6 +34,8 @@ class _MapScreenState extends State<MapScreen> {
   final _searchController = TextEditingController();
   List<PlaceSearchResult> _searchResults = [];
   bool _isSearching = false;
+
+  Post? _selectedPost; // 選択された投稿（写真プレビュー表示用）
 
   @override
   void initState() {
@@ -85,9 +88,16 @@ class _MapScreenState extends State<MapScreen> {
           icon: BitmapDescriptor.defaultMarkerWithHue(
             _getCategoryColor(post.category),
           ),
-          onTap: () => _showPostDetail(post),
+          onTap: () => _onMarkerTapped(post),
         );
       }).toSet();
+    });
+  }
+
+  // マーカータップ時の処理（写真プレビューを表示）
+  void _onMarkerTapped(Post post) {
+    setState(() {
+      _selectedPost = post;
     });
   }
 
@@ -264,10 +274,17 @@ class _MapScreenState extends State<MapScreen> {
             onMapCreated: (controller) {
               _mapController = controller;
             },
+            onTap: (_) {
+              // 地図をタップしたら選択を解除
+              setState(() {
+                _selectedPost = null;
+              });
+            },
             markers: _markers,
             myLocationEnabled: true,
             myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
+            mapToolbarEnabled: false, // Googleマップで開くボタンを非表示
           ),
 
           // 検索バー
@@ -360,6 +377,83 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
           ),
+
+          // 選択された投稿の写真プレビュー（ピンの上に表示）
+          if (_selectedPost != null)
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  GestureDetector(
+                    onTap: () => _showPostDetail(_selectedPost!),
+                    child: Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.25),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Stack(
+                        children: [
+                          // 投稿画像
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: CachedNetworkImage(
+                              imageUrl: _selectedPost!.imageUrl,
+                              width: 100,
+                              height: 100,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(
+                                color: Colors.grey[200],
+                                child: const Center(
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              ),
+                              errorWidget: (context, url, error) => Container(
+                                color: Colors.grey[200],
+                                child: const Icon(Icons.error, size: 24),
+                              ),
+                            ),
+                          ),
+                          // 閉じるボタン
+                          Positioned(
+                            top: 4,
+                            right: 4,
+                            child: GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _selectedPost = null;
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(2),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.6),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.close,
+                                  color: Colors.white,
+                                  size: 14,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 150),
+                ],
+              ),
+            ),
         ],
       ),
       floatingActionButton: Column(
