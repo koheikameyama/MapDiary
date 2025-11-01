@@ -18,6 +18,9 @@ if (localPropertiesFile.exists()) {
 // Google Maps API Keyを取得
 def googleMapsApiKey = localProperties.getProperty('GOOGLE_MAPS_API_KEY') ?: ''
 
+// AdMob App IDを取得
+def admobAppId = localProperties.getProperty('ADMOB_APP_ID') ?: ''
+
 def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
 if (flutterVersionCode == null) {
     flutterVersionCode = '1'
@@ -54,9 +57,10 @@ android {
         versionName flutterVersionName
         multiDexEnabled true
 
-        // Google Maps API Keyをマニフェストに注入
+        // API Keyをマニフェストに注入
         manifestPlaceholders = [
             GOOGLE_MAPS_API_KEY: googleMapsApiKey,
+            ADMOB_APP_ID: admobAppId,
             applicationName: "android.app.Application"
         ]
     }

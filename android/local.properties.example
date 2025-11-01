@@ -9,3 +9,7 @@ sdk.dir=/Users/YOUR_USERNAME/Library/Android/sdk
 # Google Maps API Key
 # Android用のGoogle Maps APIキーを設定してください
 GOOGLE_MAPS_API_KEY=YOUR_ANDROID_API_KEY_HERE
+
+# AdMob App ID
+# Google AdMobのApp IDを設定してください
+ADMOB_APP_ID=YOUR_ADMOB_APP_ID_HERE
