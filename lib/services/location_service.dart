@@ -84,6 +84,40 @@ class LocationService {
     return Geolocator.distanceBetween(startLat, startLng, endLat, endLng);
   }
 
+  // 周辺の場所を取得（Nearby Search）
+  Future<List<PlaceSearchResult>> getNearbyPlaces({
+    required double latitude,
+    required double longitude,
+    int radius = 2000, // 2km圏内
+  }) async {
+    try {
+      final url = Uri.parse(
+        'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=$latitude,$longitude&radius=$radius&language=ja&key=$_apiKey',
+      );
+
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+
+        if (data['status'] == 'OK') {
+          final results = data['results'] as List;
+          return results
+              .take(10) // 最大10件に制限
+              .map((result) => PlaceSearchResult.fromJson(result))
+              .toList();
+        } else {
+          // エラーの場合は静かに空のリストを返す
+          return [];
+        }
+      } else {
+        return [];
+      }
+    } catch (e) {
+      return [];
+    }
+  }
+
   // 場所を検索（Google Places API Text Search）
   Future<List<PlaceSearchResult>> searchPlaces(
     String query, {
@@ -112,24 +146,17 @@ class LocationService {
 
         if (data['status'] == 'OK') {
           final results = data['results'] as List;
-          print('検索結果: ${results.length}件');
           return results
               .map((result) => PlaceSearchResult.fromJson(result))
               .toList();
         } else {
-          print('Places API エラー: ${data['status']}');
-          if (data['error_message'] != null) {
-            print('エラー詳細: ${data['error_message']}');
-          }
+          // エラーの場合は静かに空のリストを返す
           return [];
         }
       } else {
-        print('HTTP エラー: ${response.statusCode}');
-        print('レスポンス: ${response.body}');
         return [];
       }
     } catch (e) {
-      print('場所検索エラー: $e');
       return [];
     }
   }

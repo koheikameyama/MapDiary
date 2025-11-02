@@ -32,6 +32,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
   final _captionController = TextEditingController();
   final _locationSearchController = TextEditingController();
+  final _locationSearchFocusNode = FocusNode();
   File? _selectedImage;
   PostCategory _selectedCategory = PostCategory.other;
   bool _isLoading = false;
@@ -47,7 +48,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     super.initState();
     _selectedImage = widget.initialImage;
     _loadInterstitialAd();
-    // 位置情報は自動取得せず、ユーザーが明示的に選択する必要がある
+
+    // 検索窓にフォーカスした時の処理
+    _locationSearchFocusNode.addListener(() {
+      if (_locationSearchFocusNode.hasFocus && _locationSearchController.text.isEmpty) {
+        _loadNearbyPlaces();
+      }
+    });
   }
 
   // インタースティシャル広告をロード
@@ -59,6 +66,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   void dispose() {
     _captionController.dispose();
     _locationSearchController.dispose();
+    _locationSearchFocusNode.dispose();
     super.dispose();
   }
 
@@ -71,6 +79,26 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         _longitude = position.longitude;
       });
     }
+  }
+
+  // 近くの場所を読み込む
+  Future<void> _loadNearbyPlaces() async {
+    // 現在地を取得
+    await _getLocation();
+
+    if (_latitude == null || _longitude == null) {
+      return;
+    }
+
+    // 周辺の場所を検索
+    final results = await _locationService.getNearbyPlaces(
+      latitude: _latitude!,
+      longitude: _longitude!,
+    );
+
+    setState(() {
+      _searchResults = results;
+    });
   }
 
   // カメラから写真を撮影
@@ -425,6 +453,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             const SizedBox(height: 8),
             TextField(
               controller: _locationSearchController,
+              focusNode: _locationSearchFocusNode,
               decoration: InputDecoration(
                 labelText: '場所を検索',
                 border: const OutlineInputBorder(),
