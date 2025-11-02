@@ -142,8 +142,13 @@ class MapScreenState extends State<MapScreen> {
   }
 
   // 投稿詳細を表示
-  void _showPostDetail(Post post) {
-    Navigator.of(context).push(
+  void _showPostDetail(Post post) async {
+    // 画像プレビューを非表示
+    setState(() {
+      _selectedPost = null;
+    });
+
+    await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => PostDetailScreen(post: post),
       ),
@@ -261,6 +266,21 @@ class MapScreenState extends State<MapScreen> {
             tooltip: '現在地に移動',
           ),
           PopupMenuButton<String>(
+            icon: CircleAvatar(
+              radius: 16,
+              backgroundColor: Colors.white,
+              backgroundImage: authProvider.userModel?.photoUrl != null
+                  ? CachedNetworkImageProvider(authProvider.userModel!.photoUrl!)
+                  : null,
+              child: authProvider.userModel?.photoUrl == null
+                  ? Icon(
+                      Icons.person,
+                      size: 20,
+                      color: Colors.blue[700],
+                    )
+                  : null,
+            ),
+            tooltip: 'メニュー',
             onSelected: (value) {
               if (value == 'profile') {
                 Navigator.of(context).push(
@@ -274,23 +294,24 @@ class MapScreenState extends State<MapScreen> {
               }
             },
             itemBuilder: (context) => [
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'profile',
                 child: Row(
                   children: [
-                    Icon(Icons.person),
-                    SizedBox(width: 8),
-                    Text('プロフィール編集'),
+                    Icon(Icons.person, color: Colors.blue[700]),
+                    const SizedBox(width: 8),
+                    const Text('プロフィール編集', style: TextStyle(fontSize: 15)),
                   ],
                 ),
               ),
-              const PopupMenuItem(
+              const PopupMenuDivider(),
+              PopupMenuItem(
                 value: 'logout',
                 child: Row(
                   children: [
-                    Icon(Icons.logout),
-                    SizedBox(width: 8),
-                    Text('ログアウト'),
+                    Icon(Icons.logout, color: Colors.red[600]),
+                    const SizedBox(width: 8),
+                    const Text('ログアウト', style: TextStyle(fontSize: 15)),
                   ],
                 ),
               ),
