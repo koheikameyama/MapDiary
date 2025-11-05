@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/post.dart';
 import '../models/post_category.dart';
 import '../services/firestore_service.dart';
+import '../services/storage_service.dart';
 import '../providers/auth_provider.dart';
 import 'edit_post_screen.dart';
 
@@ -19,6 +20,15 @@ class PostDetailScreen extends StatefulWidget {
 
 class _PostDetailScreenState extends State<PostDetailScreen> {
   final FirestoreService _firestoreService = FirestoreService();
+  final StorageService _storageService = StorageService();
+  final PageController _pageController = PageController();
+  int _currentPage = 0;
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
 
   // 投稿を削除
   void _deletePost() {
@@ -37,6 +47,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               final navigator = Navigator.of(context);
               final messenger = ScaffoldMessenger.of(context);
               try {
+                // 複数画像を全て削除
+                await _storageService.deleteImages(widget.post.imageUrls);
+                // Firestoreの投稿を削除
                 await _firestoreService.deletePost(widget.post.id);
                 if (mounted) {
                   navigator.pop(); // ダイアログを閉じる
@@ -121,7 +134,13 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   : Stack(
                       children: [
                         PageView.builder(
+                          controller: _pageController,
                           itemCount: widget.post.imageUrls.length,
+                          onPageChanged: (index) {
+                            setState(() {
+                              _currentPage = index;
+                            });
+                          },
                           itemBuilder: (context, index) {
                             return CachedNetworkImage(
                               imageUrl: widget.post.imageUrls[index],
@@ -141,7 +160,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                             );
                           },
                         ),
-                        // ページインジケーター
+                        // ページインジケーター（改善版）
                         Positioned(
                           bottom: 16,
                           left: 0,
@@ -158,19 +177,34 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
-                                children: List.generate(
-                                  widget.post.imageUrls.length,
-                                  (index) => Container(
-                                    width: 6,
-                                    height: 6,
-                                    margin: const EdgeInsets.symmetric(
-                                        horizontal: 3),
-                                    decoration: const BoxDecoration(
-                                      color: Colors.white,
-                                      shape: BoxShape.circle,
+                                children: [
+                                  // ドット表示
+                                  ...List.generate(
+                                    widget.post.imageUrls.length,
+                                    (index) => Container(
+                                      width: index == _currentPage ? 8 : 6,
+                                      height: index == _currentPage ? 8 : 6,
+                                      margin: const EdgeInsets.symmetric(
+                                          horizontal: 3),
+                                      decoration: BoxDecoration(
+                                        color: index == _currentPage
+                                            ? Colors.white
+                                            : Colors.white60,
+                                        shape: BoxShape.circle,
+                                      ),
                                     ),
                                   ),
-                                ),
+                                  const SizedBox(width: 8),
+                                  // ページ番号表示
+                                  Text(
+                                    '${_currentPage + 1}/${widget.post.imageUrls.length}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),

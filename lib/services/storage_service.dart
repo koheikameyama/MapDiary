@@ -99,4 +99,22 @@ class StorageService {
       rethrow;
     }
   }
+
+  // 複数の画像を削除
+  Future<void> deleteImages(List<String> imageUrls) async {
+    try {
+      for (String imageUrl in imageUrls) {
+        try {
+          Reference ref = _storage.refFromURL(imageUrl);
+          await ref.delete();
+        } catch (e) {
+          // 個別のエラーはログに記録して続行
+          developer.log('画像削除エラー: $imageUrl', error: e, name: 'StorageService');
+        }
+      }
+    } catch (e) {
+      developer.log('複数画像削除エラー', error: e, name: 'StorageService');
+      rethrow;
+    }
+  }
 }
