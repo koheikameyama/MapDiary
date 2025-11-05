@@ -99,21 +99,84 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 画像
-            CachedNetworkImage(
-              imageUrl: widget.post.imageUrl,
+            // 画像ギャラリー（複数画像対応）
+            SizedBox(
               height: 400,
-              fit: BoxFit.cover,
-              placeholder: (context, url) => Container(
-                height: 400,
-                color: Colors.grey[200],
-                child: const Center(child: CircularProgressIndicator()),
-              ),
-              errorWidget: (context, url, error) => Container(
-                height: 400,
-                color: Colors.grey[200],
-                child: const Icon(Icons.error, size: 64),
-              ),
+              child: widget.post.imageUrls.length == 1
+                  ? CachedNetworkImage(
+                      imageUrl: widget.post.imageUrls.first,
+                      height: 400,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Container(
+                        height: 400,
+                        color: Colors.grey[200],
+                        child: const Center(child: CircularProgressIndicator()),
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        height: 400,
+                        color: Colors.grey[200],
+                        child: const Icon(Icons.error, size: 64),
+                      ),
+                    )
+                  : Stack(
+                      children: [
+                        PageView.builder(
+                          itemCount: widget.post.imageUrls.length,
+                          itemBuilder: (context, index) {
+                            return CachedNetworkImage(
+                              imageUrl: widget.post.imageUrls[index],
+                              height: 400,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(
+                                height: 400,
+                                color: Colors.grey[200],
+                                child: const Center(
+                                    child: CircularProgressIndicator()),
+                              ),
+                              errorWidget: (context, url, error) => Container(
+                                height: 400,
+                                color: Colors.grey[200],
+                                child: const Icon(Icons.error, size: 64),
+                              ),
+                            );
+                          },
+                        ),
+                        // ページインジケーター
+                        Positioned(
+                          bottom: 16,
+                          left: 0,
+                          right: 0,
+                          child: Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black54,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: List.generate(
+                                  widget.post.imageUrls.length,
+                                  (index) => Container(
+                                    width: 6,
+                                    height: 6,
+                                    margin: const EdgeInsets.symmetric(
+                                        horizontal: 3),
+                                    decoration: const BoxDecoration(
+                                      color: Colors.white,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
             ),
 
             Padding(

@@ -33,6 +33,35 @@ class StorageService {
     }
   }
 
+  // 複数の画像をアップロード
+  Future<List<String>> uploadImages(
+      List<File> imageFiles, String userId) async {
+    try {
+      List<String> downloadUrls = [];
+
+      for (int i = 0; i < imageFiles.length; i++) {
+        String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+        String extension = path.extension(imageFiles[i].path);
+        String fileName = '${userId}_${timestamp}_$i$extension';
+
+        Reference ref = _storage.ref().child('posts').child(fileName);
+        UploadTask uploadTask = ref.putFile(imageFiles[i]);
+        TaskSnapshot snapshot = await uploadTask;
+        String downloadUrl = await snapshot.ref.getDownloadURL();
+
+        downloadUrls.add(downloadUrl);
+
+        // 次のファイル名が重複しないように1msだけ待つ
+        await Future.delayed(const Duration(milliseconds: 1));
+      }
+
+      return downloadUrls;
+    } catch (e) {
+      developer.log('複数画像アップロードエラー', error: e, name: 'StorageService');
+      rethrow;
+    }
+  }
+
   // プロフィール画像をアップロード
   Future<String> uploadProfileImage(File imageFile, String userId) async {
     try {

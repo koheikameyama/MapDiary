@@ -34,7 +34,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   final _captionController = TextEditingController();
   final _locationSearchController = TextEditingController();
   final _locationSearchFocusNode = FocusNode();
-  File? _selectedImage;
+  List<File> _selectedImages = []; // 複数画像対応
+  static const int _maxImages = 5; // 最大5枚
   PostCategory _selectedCategory = PostCategory.other;
   bool _isLoading = false;
   double? _latitude;
@@ -48,7 +49,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedImage = widget.initialImage;
+    if (widget.initialImage != null) {
+      _selectedImages = [widget.initialImage!];
+    }
     _loadInterstitialAd();
     _initializeLocation();
     _setupLocationSearchFocus();
@@ -56,9 +59,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
   // 初期位置情報を取得
   Future<void> _initializeLocation() async {
-    // 写真が選択されている場合、まずEXIFから位置情報を取得
-    if (_selectedImage != null) {
-      final exifLocation = await _extractLocationFromImage(_selectedImage!);
+    // 写真が選択されている場合、最初の写真のEXIFから位置情報を取得
+    if (_selectedImages.isNotEmpty) {
+      final exifLocation =
+          await _extractLocationFromImage(_selectedImages.first);
       if (exifLocation != null && mounted) {
         setState(() {
           _latitude = exifLocation['latitude'];
@@ -191,6 +195,11 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
   // カメラから写真を撮影
   Future<void> _pickImageFromCamera() async {
+    if (_selectedImages.length >= _maxImages) {
+      _showMaxImagesMessage();
+      return;
+    }
+
     final XFile? image = await _imagePicker.pickImage(
       source: ImageSource.camera,
       maxWidth: 1920,
@@ -200,33 +209,69 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
     if (image != null) {
       setState(() {
-        _selectedImage = File(image.path);
+        _selectedImages.add(File(image.path));
         _hasLoadedNearbyPlaces = false;
         _searchResults = [];
       });
-      // 新しい写真のEXIFから位置情報を取得
-      await _initializeLocation();
+      // 最初の写真のEXIFから位置情報を取得
+      if (_selectedImages.length == 1) {
+        await _initializeLocation();
+      }
     }
   }
 
-  // ギャラリーから写真を選択
-  Future<void> _pickImageFromGallery() async {
-    final XFile? image = await _imagePicker.pickImage(
-      source: ImageSource.gallery,
+  // ギャラリーから複数の写真を選択
+  Future<void> _pickImagesFromGallery() async {
+    if (_selectedImages.length >= _maxImages) {
+      _showMaxImagesMessage();
+      return;
+    }
+
+    final List<XFile> images = await _imagePicker.pickMultiImage(
       maxWidth: 1920,
       maxHeight: 1920,
       imageQuality: 85,
     );
 
-    if (image != null) {
+    if (images.isNotEmpty) {
+      // 最大枚数を超えないように制限
+      final remainingSlots = _maxImages - _selectedImages.length;
+      final imagesToAdd = images.take(remainingSlots).toList();
+
       setState(() {
-        _selectedImage = File(image.path);
+        _selectedImages.addAll(imagesToAdd.map((xFile) => File(xFile.path)));
         _hasLoadedNearbyPlaces = false;
         _searchResults = [];
       });
-      // 新しい写真のEXIFから位置情報を取得
-      await _initializeLocation();
+
+      // 最初の写真のEXIFから位置情報を取得
+      if (_selectedImages.length == imagesToAdd.length) {
+        await _initializeLocation();
+      }
+
+      // 最大枚数に達した場合は通知
+      if (images.length > remainingSlots) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('最大5枚まで選択できます')),
+          );
+        }
+      }
     }
+  }
+
+  // 画像を削除
+  void _removeImage(int index) {
+    setState(() {
+      _selectedImages.removeAt(index);
+    });
+  }
+
+  // 最大枚数メッセージを表示
+  void _showMaxImagesMessage() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('最大5枚まで選択できます')),
+    );
   }
 
   // 場所を検索
@@ -304,10 +349,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.photo_library),
-              title: const Text('ギャラリーから選択'),
+              title: const Text('ギャラリーから選択（複数可）'),
+              subtitle: Text(
+                  '最大$_maxImages枚まで（残り${_maxImages - _selectedImages.length}枚）'),
               onTap: () {
                 Navigator.of(context).pop();
-                _pickImageFromGallery();
+                _pickImagesFromGallery();
               },
             ),
           ],
@@ -323,7 +370,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
   // 実際の投稿処理
   Future<void> _submitPost() async {
-    if (_selectedImage == null) {
+    if (_selectedImages.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('写真を選択してください')),
       );
@@ -350,9 +397,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     });
 
     try {
-      // 画像をアップロード
-      String imageUrl = await _storageService.uploadImage(
-        _selectedImage!,
+      // 複数画像をアップロード
+      List<String> imageUrls = await _storageService.uploadImages(
+        _selectedImages,
         authProvider.user!.uid,
       );
 
@@ -361,7 +408,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         id: '',
         userId: authProvider.user!.uid,
         userName: authProvider.userModel?.displayName ?? 'Unknown',
-        imageUrl: imageUrl,
+        imageUrls: imageUrls,
         caption: _captionController.text.trim(),
         latitude: _latitude!,
         longitude: _longitude!,
@@ -416,38 +463,137 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 画像プレビュー
-              GestureDetector(
-                onTap: _showImagePickerDialog,
-                child: Container(
-                  height: 300,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey[400]!),
-                  ),
-                  child: _selectedImage != null
-                      ? ClipRRect(
+              // 画像プレビュー（複数画像対応）
+              _selectedImages.isEmpty
+                  ? GestureDetector(
+                      onTap: _showImagePickerDialog,
+                      child: Container(
+                        height: 200,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[200],
                           borderRadius: BorderRadius.circular(12),
-                          child: Image.file(
-                            _selectedImage!,
-                            fit: BoxFit.cover,
-                          ),
-                        )
-                      : const Column(
+                          border: Border.all(color: Colors.grey[400]!),
+                        ),
+                        child: const Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.add_a_photo,
+                            Icon(Icons.add_photo_alternate,
                                 size: 64, color: Colors.grey),
                             SizedBox(height: 8),
                             Text(
-                              'タップして写真を選択',
+                              'タップして写真を選択（最大5枚）',
                               style: TextStyle(color: Colors.grey),
                             ),
                           ],
                         ),
-                ),
-              ),
+                      ),
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 画像グリッド
+                        GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            crossAxisSpacing: 8,
+                            mainAxisSpacing: 8,
+                          ),
+                          itemCount: _selectedImages.length + 1,
+                          itemBuilder: (context, index) {
+                            if (index == _selectedImages.length) {
+                              // 追加ボタン
+                              if (_selectedImages.length < _maxImages) {
+                                return GestureDetector(
+                                  onTap: _showImagePickerDialog,
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey[200],
+                                      borderRadius: BorderRadius.circular(8),
+                                      border:
+                                          Border.all(color: Colors.grey[400]!),
+                                    ),
+                                    child: const Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.add, color: Colors.grey),
+                                        Text(
+                                          '追加',
+                                          style: TextStyle(
+                                              fontSize: 12, color: Colors.grey),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              } else {
+                                return const SizedBox.shrink();
+                              }
+                            }
+
+                            // 画像表示
+                            return Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.file(
+                                    _selectedImages[index],
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                                // 削除ボタン
+                                Positioned(
+                                  top: 4,
+                                  right: 4,
+                                  child: GestureDetector(
+                                    onTap: () => _removeImage(index),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: const BoxDecoration(
+                                        color: Colors.black54,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.close,
+                                        color: Colors.white,
+                                        size: 16,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                // 順番表示
+                                Positioned(
+                                  bottom: 4,
+                                  left: 4,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black54,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      '${index + 1}',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ],
+                    ),
               const SizedBox(height: 24),
 
               // ユーザー情報
@@ -693,7 +839,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               // 投稿ボタン
               FilledButton(
                 onPressed: (_isLoading ||
-                        _selectedImage == null ||
+                        _selectedImages.isEmpty ||
                         _latitude == null ||
                         _longitude == null)
                     ? null
